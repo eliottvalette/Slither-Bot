@@ -41,6 +41,11 @@ A powerful and feature-rich bot for Slither.io, providing enhanced gameplay with
 
 ## Installation
 
+### Quick Install
+1. Install a userscript manager browser extension (like Tampermonkey or Greasemonkey)
+2. Click [here](https://greasyfork.org/en/scripts/530956-slither-full-auto-bot-responsive-overlay) to install the script directly from GreasyFork
+
+### Manual Install
 1. Install a userscript manager browser extension (like Tampermonkey or Greasemonkey)
 2. Create a new script
 3. Copy and paste the contents of `slither_bot.js` into the script editor

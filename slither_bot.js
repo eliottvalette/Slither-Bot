@@ -1,11 +1,12 @@
 // ==UserScript==
-// @name         Slither Hacks
+// @name         Slither Full Auto Bot (Responsive Overlay)
 // @namespace    http://slither.com/io
 // @version      1.0
 // @description  Slither.com/io Bot with improved overlay and comments
 // @author       EliottValette
 // @match        http://slither.com/io
 // @grant        none
+// @license      MIT
 // ==/UserScript==
 
 /*
