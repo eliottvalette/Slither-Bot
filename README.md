@@ -2,6 +2,8 @@
 
 A powerful and feature-rich bot for Slither.io, providing enhanced gameplay with visual overlays and intelligent food targeting.
 
+![Bot in action](images/Bot_alone.png)
+
 ## Features
 
 ### Visual Overlays
@@ -14,6 +16,8 @@ A powerful and feature-rich bot for Slither.io, providing enhanced gameplay with
   - Current coordinates
   - Enemy count and positions
   - Danger level
+
+![Bot overwhelmed with enemies](images/Bot_overwhelmed.png)
 
 ### Intelligent Food Targeting
 - Smart food selection based on:
@@ -41,6 +45,8 @@ A powerful and feature-rich bot for Slither.io, providing enhanced gameplay with
 2. Create a new script
 3. Copy and paste the contents of `slither_bot.js` into the script editor
 4. Save the script
+
+![Tampermonkey Dashboard](images/TampermonkeyDashBoard.png)
 
 ## Usage
 
