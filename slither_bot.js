@@ -1,45 +1,45 @@
 // ==UserScript==
 // @name         Slither Full Auto Bot (Responsive Overlay)
 // @namespace    http://slither.com/io
-// @version      1.0
-// @description  Slither.com/io Bot with improved overlay and comments
+// @version      1.4
+// @description  Slither.io bot with enhanced overlay. Automatically collects food and avoids nearby enemies using strategic pathfinding.
 // @author       EliottValette
 // @match        http://slither.com/io
 // @grant        none
 // @license      MIT
 // ==/UserScript==
-
+ 
 /*
 ===================================================
 Section 1: Utility Functions and Debugging
 ===================================================
 */
-
+ 
 // Custom log function (only displays if "logDebugging" is enabled)
 window.log = (...args) => window.logDebugging && console.log(...args);
-
+ 
 // Functions to save and load preferences in localStorage
 const savePreference = (key, value) => localStorage.setItem(key, value);
 const loadPreference = (key, def) => JSON.parse(localStorage.getItem(key)) ?? def;
-
+ 
 let Logger = 0;
 let IsBotActive = true;
 let targetFood = null;
 let targetFoodTimestamp = 0;
 let blacklistedFoods = {};
 let criticDanger = false;
-
+ 
 // Add listener to memorize real mouse position
 window.mousePos = { x: 0, y: 0 };
 document.addEventListener('mousemove', function(e) {
     window.mousePos = { x: e.clientX, y: e.clientY };
 });
-
+ 
 // Variable to memorize bot target position (the "bot mouse pose")
 window.botTargetPos = null;
-
+ 
 console.log('Bot Starting');
-
+ 
 /*
 ===================================================
 Section 2: Window Object Debug Scan
@@ -66,7 +66,7 @@ setTimeout(() => {
         }
     }
 }, 5000);
-
+ 
 /*
 ===================================================
 Section 3: Improved Interface Overlay
@@ -91,43 +91,43 @@ coordinates and enemy count in real-time.
         font-size: 14px;
     `;
     document.body.appendChild(overlayContainer);
-
+ 
     // Creation of sub-elements for status, coordinates and enemy count
     const statusDiv = document.createElement('div');
     statusDiv.id = 'bot_status_overlay';
     statusDiv.textContent = 'Status: BOT ON (To Toggle - Press t)';
     overlayContainer.appendChild(statusDiv);
-
+ 
     const coordsDiv = document.createElement('div');
     coordsDiv.id = 'bot_coords_overlay';
     coordsDiv.textContent = 'Coords: loading...';
     overlayContainer.appendChild(coordsDiv);
-
+ 
     const enemyDiv = document.createElement('div');
     enemyDiv.id = 'bot_enemies_overlay';
     enemyDiv.textContent = 'Enemies: loading...';
     overlayContainer.appendChild(enemyDiv);
-
+ 
     const nearEnemiesDiv = document.createElement('div');
     nearEnemiesDiv.id = 'bot_enemies_near_overlay';
     nearEnemiesDiv.textContent = 'Enemies (Near): loading...';
     overlayContainer.appendChild(nearEnemiesDiv);
-
+ 
     const midEnemiesDiv = document.createElement('div');
     midEnemiesDiv.id = 'bot_enemies_mid_overlay';
     midEnemiesDiv.textContent = 'Enemies (Mid): loading...';
     overlayContainer.appendChild(midEnemiesDiv);
-
+ 
     const farEnemiesDiv = document.createElement('div');
     farEnemiesDiv.id = 'bot_enemies_far_overlay';
     farEnemiesDiv.textContent = 'Enemies (Far): loading...';
     overlayContainer.appendChild(farEnemiesDiv);
-
+ 
     const criticDangerDiv = document.createElement('div');
     criticDangerDiv.id = 'bot_critic_danger_overlay';
     criticDangerDiv.textContent = 'Danger: loading...';
     overlayContainer.appendChild(criticDangerDiv);
-
+ 
     // Continuous overlay update via requestAnimationFrame
     function updateOverlay() {
         if (window.slither && typeof window.slither.xx === 'number') {
@@ -175,7 +175,7 @@ coordinates and enemy count in real-time.
     }
     requestAnimationFrame(updateOverlay);
 })();
-
+ 
 /*
 ===================================================
 Section 4: World to Screen Coordinate Conversion
@@ -188,7 +188,7 @@ const worldToScreen = (xx, yy) => {
     const mapY = (yy - window.view_yy) * window.gsc + window.mhh2;
     return { x: mapX, y: mapY };
 };
-
+ 
 /*
 ===================================================
 Section 5: Enemy Processing
@@ -196,21 +196,21 @@ Section 5: Enemy Processing
 Functions to extract enemy body points and
 calculate line color based on distance.
 */
-
+ 
 // Gets enemy body points by traversing its segments
 function getEnemyBodyPoints(enemy) {
     const points = [];
     if (!enemy.pts) return points;
-
+ 
     for (const segment of enemy.pts) {
         if (!segment.fxs || !segment.fys) continue;
-
+ 
         // Sampling: we get about 10% of the segment points
         const step = Math.max(1, Math.floor(segment.fxs.length / 10));
         for (let i = 0; i < segment.fxs.length; i += step) {
             const x = segment.xx + segment.fxs[i];
             const y = segment.yy + segment.fys[i];
-
+ 
             if (isFinite(x) && isFinite(y)) {
                 points.push({ xx: x, yy: y });
             }
@@ -218,7 +218,7 @@ function getEnemyBodyPoints(enemy) {
     }
     return points;
 }
-
+ 
 // Calculates a color transitioning from red (close) to green (far)
 function DangerColor(start, end) {
     const dx = end.x - start.x;
@@ -230,7 +230,7 @@ function DangerColor(start, end) {
     const g = Math.floor(255 * (1 - dangerRatio));
     return `rgb(${r},${g},0)`;
 }
-
+ 
 /*
 ===================================================
 Section 6: Drawing Lines to Enemies and Food
@@ -253,7 +253,7 @@ function drawAllEnemyLines(start, enemyList) {
             z-index: 9998;
         `;
         document.body.appendChild(canvas);
-
+ 
         // Resize canvas when window is resized
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
@@ -262,11 +262,31 @@ function drawAllEnemyLines(start, enemyList) {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
-
+ 
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    enemyList.forEach(enemy => {
+ 
+    // Si le bot est OFF, on trie les ennemis par distance et on garde les 5 plus proches
+    let enemiesToDraw = enemyList;
+    if (!IsBotActive) {
+        enemiesToDraw = enemyList
+            .map(enemy => {
+                const body_points = getEnemyBodyPoints(enemy);
+                let min_dist = Infinity;
+                body_points.forEach(p => {
+                    const dx = p.xx - window.slither.xx;
+                    const dy = p.yy - window.slither.yy;
+                    const d = dx * dx + dy * dy;
+                    if (d < min_dist) min_dist = d;
+                });
+                return { enemy, min_dist };
+            })
+            .sort((a, b) => a.min_dist - b.min_dist)
+            .slice(0, 5)
+            .map(obj => obj.enemy);
+    }
+ 
+    enemiesToDraw.forEach(enemy => {
         const body_points = getEnemyBodyPoints(enemy);
         let min_dist = Infinity;
         let min_dist_point = null;
@@ -294,7 +314,8 @@ function drawAllEnemyLines(start, enemyList) {
         }
     });
 }
-
+ 
+ 
 // Draws lines connecting the player to food particles
 function drawAllFoodLines(start, foodList) {
     let canvas = document.getElementById('bot-line-overlay-food');
@@ -309,7 +330,7 @@ function drawAllFoodLines(start, foodList) {
             z-index: 9997;
         `;
         document.body.appendChild(canvas);
-
+ 
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -317,10 +338,10 @@ function drawAllFoodLines(start, foodList) {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
-
+ 
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+ 
     foodList.forEach(food => {
         const end = worldToScreen(food.xx, food.yy);
         ctx.beginPath();
@@ -331,7 +352,7 @@ function drawAllFoodLines(start, foodList) {
         ctx.stroke();
     });
 }
-
+ 
 /*
 ===================================================
 Section 7: Animation Loop for Line Drawing
@@ -359,7 +380,7 @@ Uses requestAnimationFrame for smooth animation.
     }
     requestAnimationFrame(update);
 })();
-
+ 
 (function updateFoodTargetLine() {
     let canvas = document.getElementById('bot-line-overlay-food');
     if (!canvas) {
@@ -380,7 +401,7 @@ Uses requestAnimationFrame for smooth animation.
             canvas.height = window.innerHeight;
         });
     }
-
+ 
     function update() {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -398,7 +419,7 @@ Uses requestAnimationFrame for smooth animation.
     }
     requestAnimationFrame(update);
 })();
-
+ 
 /*
 ===================================================
 Section 8: Line between Snake and Real Mouse
@@ -441,7 +462,7 @@ Draws a magenta line between the snake and the real mouse position.
     }
     requestAnimationFrame(update);
 })();
-
+ 
 /*
 ===================================================
 Section 9: Line between Snake and Bot Mouse Position
@@ -485,7 +506,7 @@ Draws a yellow line between the snake and the bot's target position.
     }
     requestAnimationFrame(update);
 })();
-
+ 
 /*
 ===================================================
 Section 10: FoodBot - Automatic Movement Towards Food
@@ -493,15 +514,15 @@ Section 10: FoodBot - Automatic Movement Towards Food
 Detects the closest enemy and chooses a food particle
 located in the opposite direction to move the mouse (and thus the snake).
 */
-
+ 
 // Simulates a mouse movement event towards a given position in the world
 function moveMouseToward(worldX, worldY) {
     // Updates the bot's target position
     window.botTargetPos = { x: worldX, y: worldY };
-
+ 
     const screenX = (worldX - window.view_xx) * window.gsc + window.mww2;
     const screenY = (worldY - window.view_yy) * window.gsc + window.mhh2;
-
+ 
     const event = new MouseEvent('mousemove', {
         clientX: screenX,
         clientY: screenY,
@@ -509,10 +530,10 @@ function moveMouseToward(worldX, worldY) {
     });
     window.dispatchEvent(event);
 }
-
+ 
 // Declare a variable for the FoodBot interval
 let foodBotInterval = null;
-
+ 
 // The function containing the FoodBot update code
 function foodBotUpdate() {
     if (
@@ -522,7 +543,7 @@ function foodBotUpdate() {
     ) {
         const self = window.slither;
         const now = Date.now();
-
+ 
         // Building the list of enemies with their closest body point
         let enemyList = [];
         if (Array.isArray(window.slithers)) {
@@ -550,7 +571,7 @@ function foodBotUpdate() {
                 }
             });
         }
-
+ 
         // Utility function to choose the nearest food
         function chooseNearestFood(foods) {
             let bestFood = null;
@@ -567,7 +588,7 @@ function foodBotUpdate() {
             });
             return bestFood;
         }
-
+ 
         // Utility function to choose the best food in SAFE mode
         // This targets foods with the largest size and high local density (grouping)
         function chooseBestFood(foods) {
@@ -594,7 +615,7 @@ function foodBotUpdate() {
             });
             return bestFood;
         }
-
+ 
         // Filter the food list to exclude blacklisted ones
         let availableFoods = window.foods.filter(f => {
             return (
@@ -604,9 +625,9 @@ function foodBotUpdate() {
                 !(blacklistedFoods[`${f.xx}_${f.yy}`] && now < blacklistedFoods[`${f.xx}_${f.yy}`])
             );
         });
-
+ 
         let target = null;
-
+ 
         if (enemyList.length === 0) {
             // No nearby enemies (safe mode): target food with highest value (size + grouping)
             target = chooseBestFood(availableFoods);
@@ -616,15 +637,32 @@ function foodBotUpdate() {
             const enemiesBetween300And700 = enemyList.filter(e => e.distance >= 300 && e.distance <= 700);
             // Case 3: If there are one or more enemies in the <300 range, run away
             if (enemiesWithin300.length > 0) {
-                enemiesWithin300.sort((a, b) => a.distance - b.distance);
-                const closest = enemiesWithin300[0];
-                const scale = 150; // Adjust escape factor if needed
-                const runAwayX = self.xx - (closest.dx / closest.distance) * scale;
-                const runAwayY = self.yy - (closest.dy / closest.distance) * scale;
+                let totalWeight = 0;
+                let avgX = 0;
+                let avgY = 0;
+ 
+                enemiesWithin300.forEach(e => {
+                    const weight = 1 / (e.distance + 1e-5); // Closer = more weight
+                    const normX = e.dx / e.distance;
+                    const normY = e.dy / e.distance;
+                    avgX += normX * weight;
+                    avgY += normY * weight;
+                    totalWeight += weight;
+                });
+ 
+                if (totalWeight > 0) {
+                    avgX /= totalWeight;
+                    avgY /= totalWeight;
+                }
+ 
+                const scale = 150;
+                const runAwayX = self.xx - avgX * scale;
+                const runAwayY = self.yy - avgY * scale;
                 moveMouseToward(runAwayX, runAwayY);
                 targetFood = null;
                 return;
             }
+ 
             // Case 2: No critical enemies (<300) but at least one between 300 and 700
             if (enemiesBetween300And700.length > 0) {
                 enemiesBetween300And700.sort((a, b) => a.distance - b.distance);
@@ -648,7 +686,7 @@ function foodBotUpdate() {
                 target = chooseNearestFood(availableFoods);
             }
         }
-
+ 
         // Blacklist mechanism if the same target is aimed at for more than 2 seconds
         if (
             target &&
@@ -672,21 +710,21 @@ function foodBotUpdate() {
         } else {
             targetFoodTimestamp = now;
         }
-
+ 
         if (target) {
             moveMouseToward(target.xx, target.yy);
             targetFood = target;
         }
     }
 }
-
+ 
 // Start FoodBot by launching the setInterval
 function startFoodBot() {
     if (!foodBotInterval) {
         foodBotInterval = setInterval(foodBotUpdate, 20);
     }
 }
-
+ 
 // Stop FoodBot
 function stopFoodBot() {
     if (foodBotInterval) {
@@ -694,12 +732,12 @@ function stopFoodBot() {
         foodBotInterval = null;
     }
 }
-
+ 
 // On startup, if bot is enabled, launch FoodBot
 if (IsBotActive) {
     startFoodBot();
 }
-
+ 
 document.addEventListener('keydown', (e) => {
     // Here we use the "t" key to toggle the bot (you can modify according to your needs)
     if (e.key.toLowerCase() === 't') {
